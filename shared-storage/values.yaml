@@ -2,6 +2,7 @@
 storage:
   hostPath: "/opt/shared-data"  # Path on each host node
   type: "DirectoryOrCreate"     # Creates directory if it doesn't exist
+  accessMode: "ReadWriteMany"  # Access mode for shared storage
 
 # Application images
 images:
