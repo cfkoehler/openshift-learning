@@ -16,15 +16,33 @@ spec:
         {{- include "shared-storage-example.selectorLabels" . | nindent 8 }}
         component: daemonset1
     spec:
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      initContainers:
+      - name: setup-permissions
+        image: "{{ .Values.images.daemonset1.repository }}:{{ .Values.images.daemonset1.tag }}"
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          mkdir -p /shared-data/nginx
+          chown -R 1001:1001 /shared-data
+          chmod -R 755 /shared-data
+        volumeMounts:
+        - name: host-storage
+          mountPath: /shared-data
+        securityContext:
+          runAsUser: 0  # Need root for chown
       containers:
       - name: nginx-container
         image: "{{ .Values.images.daemonset1.repository }}:{{ .Values.images.daemonset1.tag }}"
         imagePullPolicy: {{ .Values.images.daemonset1.pullPolicy }}
         ports:
-        - containerPort: 80
+        - containerPort: 8080
         volumeMounts:
-        - name: shared-storage
+        - name: host-storage
           mountPath: /usr/share/nginx/html
+          subPath: nginx
         - name: config-volume
           mountPath: /etc/nginx/conf.d
         resources:
@@ -33,17 +51,24 @@ spec:
         args:
         - -c
         - |
-          echo "DaemonSet 1 - Node: $NODE_NAME" > /usr/share/nginx/html/daemon1.html
+          echo "DaemonSet 1 - Node: $NODE_NAME - $(date)" > /usr/share/nginx/html/daemon1.html
+          echo "<h1>Shared Storage Demo</h1>" >> /usr/share/nginx/html/daemon1.html
+          echo "<p>Node: $NODE_NAME</p>" >> /usr/share/nginx/html/daemon1.html
+          echo "<p>DaemonSet 1 Status: Running</p>" >> /usr/share/nginx/html/daemon1.html
           nginx -g 'daemon off;'
         env:
         - name: NODE_NAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        securityContext:
+          runAsUser: 1001
+          runAsGroup: 1001
       volumes:
-      - name: shared-storage
-        persistentVolumeClaim:
-          claimName: {{ include "shared-storage-example.fullname" . }}-shared-pvc
+      - name: host-storage
+        hostPath:
+          path: {{ .Values.storage.hostPath }}
+          type: {{ .Values.storage.type }}
       - name: config-volume
         configMap:
           name: {{ include "shared-storage-example.fullname" . }}-nginx-config

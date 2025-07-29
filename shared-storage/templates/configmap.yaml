@@ -7,7 +7,7 @@ metadata:
 data:
   default.conf: |
     server {
-        listen 80;
+        listen 8080;
         server_name localhost;
         
         location / {
@@ -18,5 +18,11 @@ data:
         location /logs {
             alias /usr/share/nginx/html;
             autoindex on;
+        }
+        
+        location /health {
+            access_log off;
+            return 200 "healthy\n";
+            add_header Content-Type text/plain;
         }
     }

@@ -1,8 +1,7 @@
-# Shared storage configuration
+# Host path storage configuration
 storage:
-  storageClass: "gp2"  # Adjust for your OpenShift storage class
-  size: "10Gi"
-  accessMode: "ReadWriteMany"  # Required for sharing across pods
+  hostPath: "/opt/shared-data"  # Path on each host node
+  type: "DirectoryOrCreate"     # Creates directory if it doesn't exist
 
 # Application images
 images:
@@ -33,3 +32,9 @@ nodeSelector: {}
 
 # Tolerations for DaemonSets
 tolerations: []
+
+# Security context for OpenShift
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  fsGroup: 1001

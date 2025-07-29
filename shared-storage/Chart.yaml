@@ -1,6 +1,6 @@
 apiVersion: v2
 name: shared-storage-example
-description: Example chart with DaemonSets and Deployment sharing PVC
+description: Example chart with DaemonSets and Deployment sharing local host storage
 type: application
 version: 0.1.0
 appVersion: "1.0"

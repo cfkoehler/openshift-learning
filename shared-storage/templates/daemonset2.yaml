@@ -16,12 +16,29 @@ spec:
         {{- include "shared-storage-example.selectorLabels" . | nindent 8 }}
         component: daemonset2
     spec:
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      initContainers:
+      - name: setup-directories
+        image: "{{ .Values.images.daemonset2.repository }}:{{ .Values.images.daemonset2.tag }}"
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          mkdir -p /shared-data/logs
+          mkdir -p /shared-data/daemon2
+          chown -R 1001:1001 /shared-data
+        volumeMounts:
+        - name: host-storage
+          mountPath: /shared-data
+        securityContext:
+          runAsUser: 0  # Need root for chown
       containers:
       - name: log-processor
         image: "{{ .Values.images.daemonset2.repository }}:{{ .Values.images.daemonset2.tag }}"
         imagePullPolicy: {{ .Values.images.daemonset2.pullPolicy }}
         volumeMounts:
-        - name: shared-storage
+        - name: host-storage
           mountPath: /shared-data
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
@@ -29,9 +46,12 @@ spec:
         args:
         - -c
         - |
+          echo "DaemonSet 2 starting on node $NODE_NAME" > /shared-data/daemon2/status.txt
           while true; do
-            echo "$(date): DaemonSet 2 processing on node $NODE_NAME" >> /shared-data/daemon2.log
+            echo "$(date): DaemonSet 2 processing on node $NODE_NAME" >> /shared-data/logs/daemon2.log
             ls -la /shared-data/ > /shared-data/directory-listing.txt
+            echo "$(date): Files in shared storage:" >> /shared-data/daemon2/activity.log
+            find /shared-data -type f -exec ls -la {} \; >> /shared-data/daemon2/activity.log
             sleep 30
           done
         env:
@@ -39,10 +59,14 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        securityContext:
+          runAsUser: 1001
+          runAsGroup: 1001
       volumes:
-      - name: shared-storage
-        persistentVolumeClaim:
-          claimName: {{ include "shared-storage-example.fullname" . }}-shared-pvc
+      - name: host-storage
+        hostPath:
+          path: {{ .Values.storage.hostPath }}
+          type: {{ .Values.storage.type }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

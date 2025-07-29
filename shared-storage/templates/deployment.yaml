@@ -6,7 +6,7 @@ metadata:
     {{- include "shared-storage-example.labels" . | nindent 4 }}
     component: application
 spec:
-  replicas: 1
+  replicas: 3  # Multiple replicas can run on different nodes
   selector:
     matchLabels:
       {{- include "shared-storage-example.selectorLabels" . | nindent 6 }}
@@ -17,12 +17,28 @@ spec:
         {{- include "shared-storage-example.selectorLabels" . | nindent 8 }}
         component: application
     spec:
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+      initContainers:
+      - name: setup-app-dir
+        image: "{{ .Values.images.deployment.repository }}:{{ .Values.images.deployment.tag }}"
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          mkdir -p /shared-data/app
+          chown -R 1001:1001 /shared-data/app
+        volumeMounts:
+        - name: host-storage
+          mountPath: /shared-data
+        securityContext:
+          runAsUser: 0  # Need root for chown
       containers:
       - name: data-processor
         image: "{{ .Values.images.deployment.repository }}:{{ .Values.images.deployment.tag }}"
         imagePullPolicy: {{ .Values.images.deployment.pullPolicy }}
         volumeMounts:
-        - name: shared-storage
+        - name: host-storage
           mountPath: /app/data
         resources:
           {{- toYaml .Values.resources | nindent 10 }}
@@ -30,12 +46,20 @@ spec:
         args:
         - -c
         - |
+          echo "Application starting on node $NODE_NAME - Pod: $HOSTNAME" > /app/data/app/status-$HOSTNAME.txt
           while true; do
-            echo "$(date): Application processing shared data on node $NODE_NAME" >> /app/data/app.log
-            if [ -f /app/data/daemon2.log ]; then
-              echo "Found daemon2 log, processing..." >> /app/data/app.log
-              tail -5 /app/data/daemon2.log >> /app/data/processed-daemon2.log
+            echo "$(date): Application processing shared data on node $NODE_NAME (Pod: $HOSTNAME)" >> /app/data/app/app-$HOSTNAME.log
+            
+            # Process daemon2 logs if they exist
+            if [ -f /app/data/logs/daemon2.log ]; then
+              echo "Found daemon2 log, processing..." >> /app/data/app/app-$HOSTNAME.log
+              tail -5 /app/data/logs/daemon2.log >> /app/data/app/processed-daemon2-$HOSTNAME.log
             fi
+            
+            # Create summary of all files
+            echo "=== File Summary $(date) ===" > /app/data/app/summary-$HOSTNAME.txt
+            find /app/data -name "*.log" -exec wc -l {} \; >> /app/data/app/summary-$HOSTNAME.txt
+            
             sleep 60
           done
         env:
@@ -43,11 +67,31 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        securityContext:
+          runAsUser: 1001
+          runAsGroup: 1001
       volumes:
-      - name: shared-storage
-        persistentVolumeClaim:
-          claimName: {{ include "shared-storage-example.fullname" . }}-shared-pvc
-      # Ensure deployment lands on nodes where DaemonSets are running
+      - name: host-storage
+        hostPath:
+          path: {{ .Values.storage.hostPath }}
+          type: {{ .Values.storage.type }}
+      # Spread pods across nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: component
+                  operator: In
+                  values:
+                  - application
+              topologyKey: kubernetes.io/hostname
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
