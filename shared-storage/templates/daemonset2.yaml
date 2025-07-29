@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "shared-storage-example.fullname" . }}-daemon2
+  labels:
+    {{- include "shared-storage-example.labels" . | nindent 4 }}
+    component: daemonset2
+spec:
+  selector:
+    matchLabels:
+      {{- include "shared-storage-example.selectorLabels" . | nindent 6 }}
+      component: daemonset2
+  template:
+    metadata:
+      labels:
+        {{- include "shared-storage-example.selectorLabels" . | nindent 8 }}
+        component: daemonset2
+    spec:
+      containers:
+      - name: log-processor
+        image: "{{ .Values.images.daemonset2.repository }}:{{ .Values.images.daemonset2.tag }}"
+        imagePullPolicy: {{ .Values.images.daemonset2.pullPolicy }}
+        volumeMounts:
+        - name: shared-storage
+          mountPath: /shared-data
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          while true; do
+            echo "$(date): DaemonSet 2 processing on node $NODE_NAME" >> /shared-data/daemon2.log
+            ls -la /shared-data/ > /shared-data/directory-listing.txt
+            sleep 30
+          done
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+      volumes:
+      - name: shared-storage
+        persistentVolumeClaim:
+          claimName: {{ include "shared-storage-example.fullname" . }}-shared-pvc
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

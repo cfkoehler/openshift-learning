@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "shared-storage-example.fullname" . }}-daemon1
+  labels:
+    {{- include "shared-storage-example.labels" . | nindent 4 }}
+    component: daemonset1
+spec:
+  selector:
+    matchLabels:
+      {{- include "shared-storage-example.selectorLabels" . | nindent 6 }}
+      component: daemonset1
+  template:
+    metadata:
+      labels:
+        {{- include "shared-storage-example.selectorLabels" . | nindent 8 }}
+        component: daemonset1
+    spec:
+      containers:
+      - name: nginx-container
+        image: "{{ .Values.images.daemonset1.repository }}:{{ .Values.images.daemonset1.tag }}"
+        imagePullPolicy: {{ .Values.images.daemonset1.pullPolicy }}
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: shared-storage
+          mountPath: /usr/share/nginx/html
+        - name: config-volume
+          mountPath: /etc/nginx/conf.d
+        resources:
+          {{- toYaml .Values.resources | nindent 10 }}
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          echo "DaemonSet 1 - Node: $NODE_NAME" > /usr/share/nginx/html/daemon1.html
+          nginx -g 'daemon off;'
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+      volumes:
+      - name: shared-storage
+        persistentVolumeClaim:
+          claimName: {{ include "shared-storage-example.fullname" . }}-shared-pvc
+      - name: config-volume
+        configMap:
+          name: {{ include "shared-storage-example.fullname" . }}-nginx-config
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

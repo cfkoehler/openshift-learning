@@ -1,0 +1,35 @@
+# Shared storage configuration
+storage:
+  storageClass: "gp2"  # Adjust for your OpenShift storage class
+  size: "10Gi"
+  accessMode: "ReadWriteMany"  # Required for sharing across pods
+
+# Application images
+images:
+  daemonset1:
+    repository: "nginx"
+    tag: "latest"
+    pullPolicy: "IfNotPresent"
+  daemonset2:
+    repository: "busybox"
+    tag: "latest"
+    pullPolicy: "IfNotPresent"
+  deployment:
+    repository: "alpine"
+    tag: "latest"
+    pullPolicy: "IfNotPresent"
+
+# Resource limits
+resources:
+  limits:
+    cpu: "100m"
+    memory: "128Mi"
+  requests:
+    cpu: "50m"
+    memory: "64Mi"
+
+# Node selector for targeting specific nodes
+nodeSelector: {}
+
+# Tolerations for DaemonSets
+tolerations: []

@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "shared-storage-example.fullname" . }}-service
+  labels:
+    {{- include "shared-storage-example.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "shared-storage-example.selectorLabels" . | nindent 4 }}
+    component: daemonset1
